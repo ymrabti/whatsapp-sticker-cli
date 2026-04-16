@@ -1,78 +1,67 @@
-#!/usr/bin/env node
-
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
 const fs = require('fs-extra');
 const path = require('path');
-const { execSync } = require('child_process');
-const { program } = require('commander');
+const { createStickerFromFile } = require('./utils/sticker');
 
-program
-    .requiredOption('-i, --input <folder>', 'Input folder with webp files')
-    .requiredOption('-o, --output <folder>', 'Output folder')
-    .parse(process.argv);
+const client = new Client({
+    authStrategy: new LocalAuth({
+        dataPath: './sessions',
+    }),
+    puppeteer: {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    },
+});
 
-const options = program.opts();
+// QR login
+client.on('qr', (qr) => {
+    qrcode.generate(qr, { small: true });
+    console.log('Scan QR to login');
+});
 
-const inputDir = path.resolve(options.input);
-const outputDir = path.resolve(options.output);
+client.on('ready', () => {
+    console.log('WhatsApp Bot is ready');
+});
 
-const config = fs.existsSync('./config.json')
-    ? require('./config.json')
-    : { packName: 'Sticker Pack', author: 'CLI', quality: 60, size: 512 };
+client.on('message_create', async (msg) => {
+    console.log(msg.body);
+    const chat = await msg.getChat();
+    const text = msg.body.toLowerCase();
 
-fs.ensureDirSync(outputDir);
+    // Send single sticker
+    if (text.startsWith('/sticker ')) {
+        const name = text.replace('/sticker ', '').trim();
+        const filePath = path.join(__dirname, 'stickers', name);
 
-function processSticker(file) {
-    const inputPath = path.join(inputDir, file);
-    const outputPath = path.join(outputDir, file);
+        if (!fs.existsSync(filePath)) {
+            return msg.reply('Sticker not found');
+        }
 
-    console.log('Processing:', file);
-
-    // FFmpeg handles both static and animated WEBP
-    const cmd = `
-    ffmpeg -y -i "${inputPath}" \
-    -vf "scale=${config.size}:${config.size}:force_original_aspect_ratio=decrease,pad=${config.size}:${config.size}:(ow-iw)/2:(oh-ih)/2:color=white" \
-    -loop 0 -q:v ${config.quality} "${outputPath}"
-  `;
-
-    execSync(cmd, { stdio: 'ignore' });
-}
-
-function generatePackMetadata(files) {
-    const stickers = files.map((f, index) => ({
-        id: index + 1,
-        name: path.parse(f).name,
-        file: f,
-    }));
-
-    const pack = {
-        identifier: 'cli.sticker.pack',
-        name: config.packName,
-        publisher: config.author,
-        tray_image_file: stickers[0]?.file || '',
-        stickers,
-    };
-
-    fs.writeJsonSync(path.join(outputDir, 'sticker-pack.json'), pack, {
-        spaces: 2,
-    });
-}
-
-function run() {
-    const files = fs.readdirSync(inputDir).filter((f) => f.endsWith('.webp'));
-
-    if (!files.length) {
-        console.log('No WEBP files found.');
-        return;
+        const sticker = await createStickerFromFile(filePath);
+        await client.sendMessage(msg.from, sticker, { sendMediaAsSticker: true });
     }
 
-    console.log(`Found ${files.length} stickers`);
+    // Send all stickers in folder
+    if (text === '/pack') {
+        const files = fs.readdirSync('./stickers').filter((f) => f.endsWith('.webp'));
 
-    files.forEach(processSticker);
+        for (const file of files) {
+            const sticker = await createStickerFromFile(path.join(__dirname, 'stickers', file));
+            await client.sendMessage(msg.from, sticker, { sendMediaAsSticker: true });
+        }
 
-    generatePackMetadata(files);
+        msg.reply('Sticker pack sent ✅');
+    }
 
-    console.log('\nDONE!');
-    console.log('Output:', outputDir);
-}
+    // help
+    if (text === '/help') {
+        msg.reply(`
+Commands:
+ /sticker name.webp  → send single sticker
+ /pack               → send full pack
+    `);
+    }
+});
 
-run();
+client.initialize();
