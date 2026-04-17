@@ -10,7 +10,7 @@ const client = new Client({
     }),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     },
 });
 
@@ -46,7 +46,6 @@ client.on('message_reaction', async (msg) => {
 });
 
 client.on('message_create', async (msg) => {
-    console.log(msg.body);
     const chat = await msg.getChat();
     const text = msg.body.toLowerCase();
 
@@ -60,7 +59,7 @@ client.on('message_create', async (msg) => {
         }
 
         const sticker = await createStickerFromFile(filePath);
-        await client.sendMessage(msg.from, sticker, { sendMediaAsSticker: true });
+        await client.sendMessage(msg.to, sticker, { sendMediaAsSticker: true });
     }
 
     // Send all stickers in folder
@@ -73,7 +72,9 @@ client.on('message_create', async (msg) => {
             const sticker = await createStickerFromFile(
                 path.join(__dirname, 'stickers', 'gif', file),
             );
-            await client.sendMessage(msg.from, sticker, { sendMediaAsSticker: true });
+            await client.sendMessage(msg.fromMe ? msg.to : msg.from, sticker, {
+                sendMediaAsSticker: true,
+            });
         }
 
         msg.reply('Sticker pack sent ✅');
@@ -83,7 +84,7 @@ client.on('message_create', async (msg) => {
     if (text === '/help') {
         msg.reply(`
 Commands:
- /sticker name.webp  → send single sticker
+ /sticker name.gif  → send single sticker
  /pack               → send full pack
     `);
     }

@@ -1,0 +1,16 @@
+name: wa-sticker-bot
+
+services:
+    wa-bot:
+        build: .
+        container_name: wa-sticker-bot
+        restart: unless-stopped
+
+        volumes:
+            - ./stickers:/app/stickers
+            - ./sessions:/app/sessions
+            - ./gif:/app/gif
+
+        environment:
+            - NODE_ENV=production
+            - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
