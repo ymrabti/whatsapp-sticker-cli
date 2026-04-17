@@ -24,6 +24,27 @@ client.on('ready', () => {
     console.log('WhatsApp Bot is ready');
 });
 
+client.on('message', async (msg) => {
+    console.log('MESSAGE_RECEIVED:', msg.body, 'FROM ME:', msg.fromMe);
+});
+
+client.on('message_revoke_everyone', async (msg) => {
+    console.log('MESSAGE_REVOKED:', msg.body, 'FROM ME:', msg.fromMe);
+});
+
+client.on('message_edit', async (msg) => {
+    console.log('MESSAGE_EDITED:', msg.body, 'FROM ME:', msg.fromMe);
+});
+
+client.on('message_reaction', async (msg) => {
+    console.log(
+        'MESSAGE_REACTION:',
+        msg.reaction,
+        'FROM ME:',
+        msg.senderId === client.info.wid._serialized,
+    );
+});
+
 client.on('message_create', async (msg) => {
     console.log(msg.body);
     const chat = await msg.getChat();
@@ -32,7 +53,7 @@ client.on('message_create', async (msg) => {
     // Send single sticker
     if (text.startsWith('/sticker ')) {
         const name = text.replace('/sticker ', '').trim();
-        const filePath = path.join(__dirname, 'stickers', name);
+        const filePath = path.join(__dirname, 'stickers', 'gif', name);
 
         if (!fs.existsSync(filePath)) {
             return msg.reply('Sticker not found');
@@ -44,10 +65,14 @@ client.on('message_create', async (msg) => {
 
     // Send all stickers in folder
     if (text === '/pack') {
-        const files = fs.readdirSync('./stickers').filter((f) => f.endsWith('.webp'));
+        const files = fs
+            .readdirSync('./stickers/gif')
+            .filter((f) => f.endsWith('.gif') || f.endsWith('.webp'));
 
         for (const file of files) {
-            const sticker = await createStickerFromFile(path.join(__dirname, 'stickers', file));
+            const sticker = await createStickerFromFile(
+                path.join(__dirname, 'stickers', 'gif', file),
+            );
             await client.sendMessage(msg.from, sticker, { sendMediaAsSticker: true });
         }
 
